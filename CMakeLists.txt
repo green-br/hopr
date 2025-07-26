@@ -2,12 +2,8 @@
 # HOPR CMake configuration
 # =========================================================================
 # NOTE: use minimum CMake version required by tools/libs (Paraview, HDF5, FFTW)
-CMAKE_MINIMUM_REQUIRED(VERSION 3.5.2)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10.0)
 # Policies (see https://cmake.org/cmake/help/v3.13/manual/cmake-policies.7.html)
-# VERSION_GREATER_EQUAL is incompatible with CMAKE versions < 3.7
-IF(NOT(${CMAKE_VERSION} VERSION_LESS "3.6.0"))
-  SET(GITSHALLOW "GIT_SHALLOW ON")
-ENDIF()
 IF(NOT(${CMAKE_VERSION} VERSION_LESS "3.12.0"))
   CMAKE_POLICY(SET CMP0074 NEW)
 ENDIF()
