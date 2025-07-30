@@ -53,27 +53,42 @@ INCLUDE(GNUInstallDirs)
 # =========================================================================
 # Store the current commit information
 # =========================================================================
-SET(commit_header "${CMAKE_CURRENT_SOURCE_DIR}/src/commit.h")
+SET(buildinfo "${CMAKE_CURRENT_SOURCE_DIR}/src/buildinfo.h")
 
 # Write an inline CMake update script to a temporary file.
-FILE(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update_commit.cmake"
+FILE(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update_buildinfo.cmake"
 "EXECUTE_PROCESS(
-  COMMAND git rev-parse HEAD
+  COMMAND git rev-parse --short HEAD
   WORKING_DIRECTORY \"${CMAKE_CURRENT_SOURCE_DIR}\"
   OUTPUT_VARIABLE GIT_COMMIT
   OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-)
+  ERROR_QUIET)
 IF(NOT GIT_COMMIT)
   SET(GIT_COMMIT \"\")
 ENDIF()
-FILE(WRITE \"\${commit_header}\" \"! Define the current commit hash. The default must remain empty, i.e., ''.\n#define GIT_CURRENT_COMMIT \\\"\${GIT_COMMIT}\\\"\n\")
+
+EXECUTE_PROCESS(
+  COMMAND date \"+%b %d %Y, %H:%M:%S\"
+  OUTPUT_VARIABLE BUILD_DATE
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET)
+
+FILE(WRITE \"\${buildinfo}\" \"! Define the current commit hash. The default must remain empty, i.e., ''.\n\
+#define GIT_CURRENT_COMMIT '${GIT_COMMIT}'\n\
+#define BUILD_DATE         '${BUILD_DATE}'\n\
+#define BUILD_VERSION_${CMAKE_Fortran_COMPILER_ID}  '${CMAKE_Fortran_COMPILER_VERSION}'\n\
+#define BUILD_VERSION_MPI  'compiled without MPI'\n\
+\")
 ")
 
-# Create a custom target that always updates the commit header.
+# Create a custom target that always updates the buildinfo.
 # This target will run on every build invocation.
-ADD_CUSTOM_TARGET(UpdateGitCommitHash ALL
-  COMMAND ${CMAKE_COMMAND} -Dcommit_header=${commit_header} -P ${CMAKE_CURRENT_BINARY_DIR}/update_commit.cmake
+ADD_CUSTOM_TARGET(UpdateBuildInfo ALL
+  COMMAND ${CMAKE_COMMAND}
+          -Dbuildinfo=${buildinfo}
+          -DCMAKE_Fortran_COMPILER_ID=${CMAKE_Fortran_COMPILER_ID}
+          -DCMAKE_Fortran_COMPILER_VERSION=${CMAKE_Fortran_COMPILER_VERSION}
+          -P ${CMAKE_CURRENT_BINARY_DIR}/update_buildinfo.cmake
   COMMENT "Updating commit header with current git commit"
   VERBATIM
 )

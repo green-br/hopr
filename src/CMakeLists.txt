@@ -63,6 +63,8 @@ SET_TARGET_PROPERTIES(hoprlibC   PROPERTIES LINKER_LANGUAGE C
                                             COMPILE_OPTIONS "-fPIC"
                                             CMAKE_POSITION_INDEPENDENT_CODE ON)
 ADD_LIBRARY(          hoprlib    STATIC $<TARGET_OBJECTS:hoprlibF90> $<TARGET_OBJECTS:hoprlibC>)
+# Make sure that the script is executed even though cmake is not explicitly executed after the commit is changed in git
+ADD_DEPENDENCIES(hoprlibF90 UpdateBuildInfo)
 IF(SELFBUILTEXTERNALS)
   ADD_DEPENDENCIES(hoprlibF90 ${SELFBUILTEXTERNALS})
 ENDIF()

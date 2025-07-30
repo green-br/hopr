@@ -104,20 +104,20 @@ ELSE()
   UNSET(HDF5_VERSION)
   UNSET(HDF5_INCLUDE_DIR)
   UNSET(HDF5_LIBRARIES)
-  UNSET(HDF5_Fortran_LIBRARIES)
   FIND_PACKAGE(HDF5 ${HDF5_STR} QUIET COMPONENTS C Fortran HDF5_PREFER_PARALLEL=OFF PATHS ${LIBS_HDF5_DIR} NO_DEFAULT_PATH)
 
   IF(HDF5_FOUND)
     # If re-running CMake, it might wrongly pick-up the system HDF5
-    IF(NOT EXISTS ${LIBS_HDF5_DIR}/lib/libhdf5.so)
+    IF(NOT EXISTS ${LIBS_HDF5_DIR}/lib/libhdf5.a)
       UNSET(HDF5_FOUND)
       SET(HDF5_VERSION     ${HDF5_STR})
     ENDIF()
 
     # CMake might fail to set the HDF5 paths
     IF(HDF5_FOUND AND "${HDF5_LIBRARIES}" STREQUAL "")
-      SET(HDF5_LIBRARIES         ${LIBS_HDF5_DIR}/lib/libhdf5.so ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.so ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a)
-      SET(HDF5_Fortran_LIBRARIES ${LIBS_HDF5_DIR}/lib/libhdf5.so ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.so ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a)
+      SET(HDF5_INCLUDE_DIR       ${LIBS_HDF5_DIR}/include)
+      # WARNING: The order of the following libraries matters! They need to be listed from the most dependent to the least dependent.
+      SET(HDF5_LIBRARIES         ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5_f90cstub.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl_f90cstub.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl.a ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_tools.a)
     ENDIF()
   ENDIF()
 
@@ -140,9 +140,10 @@ ELSE()
       CMAKE_GENERATOR    "Unix Makefiles"
       BUILD_COMMAND      make -j${N}
       # Set the CMake arguments for HDF5
-      CMAKE_ARGS         -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=${LIBS_HDF5_DIR} -DHDF5_INSTALL_CMAKE_DIR=lib/cmake/hdf5 -DCMAKE_POLICY_DEFAULT_CMP0175=OLD -DBUILD_STATIC_LIBS=ON -DHDF5_BUILD_FORTRAN=ON -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF -DHDF5_ENABLE_SZIP_SUPPORT=OFF -DHDF5_ENABLE_PARALLEL=OFF
+      CMAKE_ARGS         -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=${LIBS_HDF5_DIR} -DHDF5_INSTALL_CMAKE_DIR=lib/cmake/hdf5 -DCMAKE_POLICY_DEFAULT_CMP0175=OLD -DBUILD_STATIC_LIBS=ON -DBUILD_SHARED_LIBS=OFF -DHDF5_BUILD_FORTRAN=ON -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF -DHDF5_ENABLE_SZIP_SUPPORT=OFF -DHDF5_ENABLE_PARALLEL=OFF
       # Set the build byproducts
-      INSTALL_BYPRODUCTS ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5.so ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.so ${LIBS_HDF5_DIR}/bin/h5diff
+      # WARNING: The order of the following libraries matters! They need to be listed from the most dependent to the least dependent.
+      INSTALL_BYPRODUCTS ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5_f90cstub.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl_f90cstub.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl.a ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_tools.a ${LIBS_HDF5_DIR}/bin/h5diff
     )
 
     # Add CMake HDF5 to the list of self-built externals
@@ -154,8 +155,8 @@ ELSE()
     # Set HDF5 paths
     SET(HDF5_INCLUDE_DIR       ${LIBS_HDF5_DIR}/include)
     SET(HDF5_DIFF_EXECUTABLE   ${LIBS_HDF5_DIR}/bin/h5diff)
-    SET(HDF5_LIBRARIES         ${LIBS_HDF5_DIR}/lib/libhdf5.so ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.so ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a)
-    SET(HDF5_Fortran_LIBRARIES ${LIBS_HDF5_DIR}/lib/libhdf5.so ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.so ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a)
+      # WARNING: The order of the following libraries matters! They need to be listed from the most dependent to the least dependent.
+    SET(HDF5_LIBRARIES         ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5_f90cstub.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl_f90cstub.a ${LIBS_HDF5_DIR}/lib/libhdf5_hl.a ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5_tools.a)
   ENDIF()
 
   # Set build status to self-built
@@ -265,43 +266,64 @@ ELSE()
   # Set math libs build dir
   SET(LIBS_MATH_DIR  ${LIBS_EXTERNAL_LIB_DIR}/${LIBS_BUILD_MATH_LIB_VENDOR})
 
+  # Set parallel build with maximum number of threads
+  INCLUDE(ProcessorCount)
+  PROCESSORCOUNT(N)
+
+  IF("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+    SET(BUILD_COMMAND ninja)
+  ELSEIF("${CMAKE_GENERATOR}" STREQUAL "Unix Makefiles")
+    SET(BUILD_COMMAND make)
+  ELSE()
+    MESSAGE(FATAL_ERROR "Unknown build system")
+  ENDIF()
+
   IF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "LAPACK")
     # Check if math lib was already built
-    IF (NOT EXISTS "${LIBS_MATH_DIR}/lib/liblapack.so")
+    IF (NOT EXISTS "${LIBS_MATH_DIR}/lib/liblapack.a")
       # Let CMake take care of download, configure and build
       EXTERNALPROJECT_ADD(${LIBS_BUILD_MATH_LIB_VENDOR}
-        GIT_REPOSITORY ${MATH_LIB_DOWNLOAD}
-        GIT_TAG ${MATH_LIB_TAG}
-        GIT_PROGRESS TRUE
+        GIT_REPOSITORY     ${MATH_LIB_DOWNLOAD}
+        GIT_TAG            ${MATH_LIB_TAG}
+        GIT_PROGRESS       TRUE
         ${${GITSHALLOW}}
-        PREFIX ${LIBS_MATH_DIR}
-        UPDATE_COMMAND ""
-        CMAKE_ARGS -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=${LIBS_MATH_DIR} -DBLAS++=OFF -DLAPACK++=OFF -DBUILD_SHARED_LIBS=ON -DCBLAS=OFF -DLAPACKE=OFF -DBUILD_TESTING=OFF
-        BUILD_BYPRODUCTS ${LIBS_MATH_DIR}/lib/liblapack.so ${LIBS_MATH_DIR}/lib/libblas.so
+        PREFIX             ${LIBS_MATH_DIR}
+        UPDATE_COMMAND     ""
+        # Set parallel build with maximum number of threads
+        BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
+        # Set the CMake arguments for LAPACK
+        CMAKE_ARGS         -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=${LIBS_MATH_DIR} -DBLAS++=OFF -DLAPACK++=OFF -DBUILD_SHARED_LIBS=OFF -DCBLAS=OFF -DLAPACKE=OFF -DBUILD_TESTING=OFF
+        # Set the build byproducts
+        BUILD_BYPRODUCTS   ${LIBS_MATH_DIR}/lib/liblapack.a ${LIBS_MATH_DIR}/lib/libblas.a
       )
 
       LIST(APPEND SELFBUILTEXTERNALS ${LIBS_BUILD_MATH_LIB_VENDOR})
     ENDIF()
   ELSEIF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "OpenBLAS")
     # Check if math lib was already built
-    IF (NOT EXISTS "${LIBS_MATH_DIR}/libopenblas.so")
+    IF (NOT EXISTS "${LIBS_MATH_DIR}/libopenblas.a")
       # Let CMake take care of download, configure and build
       EXTERNALPROJECT_ADD(${LIBS_BUILD_MATH_LIB_VENDOR}
-        GIT_REPOSITORY ${MATH_LIB_DOWNLOAD}
-        GIT_TAG ${MATH_LIB_TAG}
-        GIT_PROGRESS TRUE
+        GIT_REPOSITORY     ${MATH_LIB_DOWNLOAD}
+        GIT_TAG            ${MATH_LIB_TAG}
+        GIT_PROGRESS       TRUE
         ${${GITSHALLOW}}
-        PREFIX ${LIBS_MATH_DIR}
-        UPDATE_COMMAND ""
-        CONFIGURE_COMMAND ""
-        BUILD_BYPRODUCTS ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR}/libopenblas.so
-        BUILD_IN_SOURCE TRUE
-        INSTALL_COMMAND ""
+        PREFIX             ${LIBS_MATH_DIR}
+        UPDATE_COMMAND     ""
+        CONFIGURE_COMMAND  ""
+        # Set parallel build with maximum number of threads
+        BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
+        # Set the CMake arguments for OpenBLAS
+        BUILD_BYPRODUCTS   ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR}/libopenblas.a
+        BUILD_IN_SOURCE    TRUE
+        INSTALL_COMMAND    ""
       )
 
       LIST(APPEND SELFBUILTEXTERNALS ${LIBS_BUILD_MATH_LIB_VENDOR})
     ENDIF()
   ENDIF()
+
+  UNSET(BUILD_COMMAND)
 
   IF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "LAPACK")
     # Set math lib paths
@@ -312,8 +334,8 @@ ELSE()
     UNSET(BLAS_LIBRARY)
     UNSET(LAPACK_LIBRARIES)
 
-    SET(LAPACK_LIBRARY                  ${MATH_LIB_LIBRARIES}/liblapack.so)
-    SET(BLAS_LIBRARY                    ${MATH_LIB_LIBRARIES}/libblas.so)
+    SET(LAPACK_LIBRARY                  ${MATH_LIB_LIBRARIES}/liblapack.a)
+    SET(BLAS_LIBRARY                    ${MATH_LIB_LIBRARIES}/libblas.a)
     SET(LAPACK_LIBRARIES                ${LAPACK_LIBRARY}${BLAS_LIBRARY})
 
     # Actually add the math lib paths to the linking paths
@@ -327,7 +349,7 @@ ELSE()
     UNSET(LAPACK_LIBRARY)
     UNSET(LAPACK_LIBRARIES)
 
-    SET(LAPACK_LIBRARY                  ${MATH_LIB_LIBRARIES}/libopenblas.so)
+    SET(LAPACK_LIBRARY                  ${MATH_LIB_LIBRARIES}/libopenblas.a)
     SET(LAPACK_LIBRARIES                ${LAPACK_LIBRARY}${BLAS_LIBRARY})
 
     # Actually add the math lib paths to the linking paths
@@ -427,7 +449,7 @@ ELSE()
 
     IF(CGNS_FOUND)
       # If re-running CMake, it might wrongly pick-up the system HDF5
-      IF(NOT EXISTS ${LIBS_CGNS_DIR}/lib/libcgns.so)
+      IF(NOT EXISTS ${LIBS_CGNS_DIR}/lib/libcgns.a)
       # IF (NOT EXISTS "${LIBS_CGNS_DIR}/lib/libcgns.a")
         UNSET(CGNS_FOUND)
         SET(CGNS_VERSION     ${CGNS_STR})
@@ -444,6 +466,18 @@ ELSE()
       # OPTION(LIBS_BUILD_CGNS_ENABLE_HDF5 "Build CGNS library with -DCGNS_ENABLE_HDF5=ON" ON)
       # MESSAGE(STATUS "Build CGNS library with -DCGNS_ENABLE_HDF5=" ${LIBS_BUILD_CGNS_ENABLE_HDF5})
 
+      # Set parallel build with maximum number of threads
+      INCLUDE(ProcessorCount)
+      PROCESSORCOUNT(N)
+
+      IF("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+        SET(BUILD_COMMAND ninja)
+      ELSEIF("${CMAKE_GENERATOR}" STREQUAL "Unix Makefiles")
+        SET(BUILD_COMMAND make)
+      ELSE()
+        MESSAGE(FATAL_ERROR "Unknown build system")
+      ENDIF()
+
       # Let CMake take care of download, configure and build
       EXTERNALPROJECT_ADD(cgns
         GIT_REPOSITORY     ${CGNS_DOWNLOAD}
@@ -452,10 +486,12 @@ ELSE()
         ${${GITSHALLOW}}
         PREFIX             ${LIBS_CGNS_DIR}
         INSTALL_DIR        ${LIBS_CGNS_DIR}
+        # Set parallel build with maximum number of threads
+        BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
         # Set the CMake arguments for CGNS
-        CMAKE_ARGS         -DCMAKE_INSTALL_PREFIX=${LIBS_CGNS_DIR} -DCMAKE_PREFIX_PATH=${LIBS_HDF5_DIR} -DCGNS_ENABLE_FORTRAN=ON -DCGNS_ENABLE_64BIT=${LIBS_CGNS_64BIT} -DCGNS_BUILD_SHARED=ON -DCGNS_USE_SHARED=ON -DCMAKE_BUILD_TYPE=Release -DCGNS_BUILD_CGNSTOOLS=OFF -DCGNS_ENABLE_HDF5=ON -DCGNS_ENABLE_PARALLEL=OFF -DCGNS_ENABLE_TESTS=OFF -DCMAKE_SKIP_RPATH=ON
+        CMAKE_ARGS         -DCMAKE_INSTALL_PREFIX=${LIBS_CGNS_DIR} -DCMAKE_PREFIX_PATH=${LIBS_HDF5_DIR} -DCGNS_ENABLE_FORTRAN=ON -DCGNS_ENABLE_64BIT=${LIBS_CGNS_64BIT} -DCGNS_BUILD_SHARED=OFF -DCGNS_USE_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DCGNS_BUILD_CGNSTOOLS=OFF -DCGNS_ENABLE_HDF5=ON -DCGNS_ENABLE_PARALLEL=OFF -DCGNS_ENABLE_TESTS=OFF -DCMAKE_SKIP_RPATH=ON
         # Set the build byproducts
-        BUILD_BYPRODUCTS   ${LIBS_CGNS_DIR}/lib/libcgns.a ${LIBS_CGNS_DIR}/lib/libcgns.so
+        BUILD_BYPRODUCTS   ${LIBS_CGNS_DIR}/lib/libcgns.a
       )
 
       # Add CMake CGNS to the list of self-built externals
@@ -471,7 +507,7 @@ ELSE()
 
     # Set CGNS paths
     SET(CGNS_INCLUDE_DIR       ${LIBS_CGNS_DIR}/include)
-    SET(CGNS_LIBRARIES         ${LIBS_CGNS_DIR}/lib/libcgns.so ${LIBS_CGNS_DIR}/lib/libcgns.a)
+    SET(CGNS_LIBRARIES         ${LIBS_CGNS_DIR}/lib/libcgns.a)
 
     # Set build status to self-built
     SET(CGNS_BUILD_STATUS "self-built")
