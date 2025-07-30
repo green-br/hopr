@@ -97,7 +97,7 @@ ELSE()
   MESSAGE(STATUS "Setting [HDF5] download tag:  ${HDF5_TAG}")
 
   # Set HDF5 build dir
-  SET(LIBS_HDF5_DIR ${LIBS_EXTERNAL_LIB_DIR}/HDF5/build)
+  SET(LIBS_HDF5_DIR ${LIBS_EXTERNAL_LIB_DIR}/HDF5)
 
   # Check if HDF5 was already built
   UNSET(HDF5_FOUND)
@@ -349,87 +349,159 @@ IF (NOT LIBS_USE_CGNS)
   UNSET(LIBS_BUILD_CGNS_INT CACHE)
   UNSET(LIBS_BUILD_CGNS_TAG CACHE)
 ELSE()
-  ADD_DEFINITIONS(-DPP_USE_CGNS=${HOPR_USE_CGNS})
-  SET(LIBS_BUILD_CGNS ON CACHE BOOL "Compile and build CGNS library")
-  SET(LIBS_BUILD_CGNS_INT "32" CACHE STRING "integer type in CGNS lib")
-  ADD_DEFINITIONS(-DPP_CGNS_INT=${LIBS_BUILD_CGNS_INT})
+  ADD_COMPILE_DEFINITIONS(PP_USE_CGNS=${LIBS_USE_CGNS})
+
+  # Try to find system CGNS
+  IF (NOT LIBS_BUILD_CGNS)
+    FIND_PACKAGE(CGNS QUIET)
+  ENDIF()
+
+  IF(CGNS_FOUND)
+    MESSAGE (STATUS "[CGNS] found in system libraries")
+    SET(LIBS_BUILD_CGNS OFF CACHE BOOL "Compile and build CGNS library")
+  ELSE()
+    MESSAGE (STATUS "[CGNS] not found in system libraries")
+    SET(LIBS_BUILD_CGNS ON  CACHE BOOL "Compile and build CGNS library")
+  ENDIF()
 
   # Use system CGNS
   IF (NOT LIBS_BUILD_CGNS)
-    FIND_PACKAGE(CGNS)
-    IF (CGNS_FOUND)
-      MESSAGE(STATUS "CGNS include dir: " ${CGNS_INCLUDE_DIR})
-      LIST(INSERT linkedlibs 0 ${CGNS_LIBRARIES})
-      INCLUDE_DIRECTORIES (${CGNS_INCLUDE_DIR})
+    # If library is specifically requested, it is required
+    FIND_PACKAGE(CGNS REQUIRED)
 
-      # Find "^#define CGNS_VERSION" and get only the numbers and remove trailing line breaks
-      EXECUTE_PROCESS(COMMAND cat "${CGNS_INCLUDE_DIR}/cgnslib.h" COMMAND grep "^#define CGNS_VERSION" COMMAND grep -o "[[:digit:]]*" COMMAND tr -d '\n' OUTPUT_VARIABLE CGNS_VERSION)
-      MESSAGE(STATUS "Found CGNS version in cgnslib.h [${CGNS_VERSION}]")
+    # Check the integer type
+    # INCLUDE(CheckCSourceCompiles)
+    #
+    # SET(CGNS_64BIT_CHECK "
+# #include <cgnslib.h>
+# #if CG_BUILD_64BIT
+#     int main(){return 1;}
+# #else
+#     int main(){return 0;}
+# #endif
+#     ")
 
-    ELSE()
-      MESSAGE(ERROR "CGNS not found")
-    ENDIF()
+    # CHECK_C_SOURCE_COMPILES("${CGNS_64BIT_CHECK}" CGNS_IS_64BIT)
+    # IF (CGNS_IS_64BIT)
+    #   ADD_COMPILE_DEFINITIONS(PP_CGNS_INT=64)
+    # ELSE()
+      ADD_COMPILE_DEFINITIONS(PP_CGNS_INT=32)
+    # ENDIF()
+
+    # Set build status to system
+    SET(CGNS_BUILD_STATUS "system")
   ELSE()
+    MESSAGE(STATUS "Setting [CGNS] to self-build")
+    # Origin pointing to Github
+    IF("${GIT_ORIGIN}" MATCHES ".github.com")
+      SET (CGNSDOWNLOAD "https://github.com/CGNS/CGNS.git")
+    ELSE()
+      SET (CGNSDOWNLOAD ${LIBS_DLPATH}libs/cgns.git )
+    ENDIF()
+    SET(CGNS_DOWNLOAD ${CGNSDOWNLOAD} CACHE STRING "CGNS Download-link")
+    MESSAGE(STATUS "Setting [CGNS] download link: ${CGNSDOWNLOAD}")
+    MARK_AS_ADVANCED(FORCE CGNS_DOWNLOAD)
+
+    # Offer CGNS Integer Type
+    SET(LIBS_BUILD_CGNS_INT "64" CACHE STRING "Integer type in CGNS lib" FORCE)
+    SET_PROPERTY(CACHE LIBS_BUILD_CGNS_INT PROPERTY STRINGS 32 64)
+    ADD_COMPILE_DEFINITIONS(PP_CGNS_INT=${LIBS_BUILD_CGNS_INT})
 
     # Set CGNS_Tag
-    SET (LIBS_BUILD_CGNS_TAG "v4.3.0" CACHE STRING "CGNS version tag from ${CGNSDOWNLOAD}")
-    SET_PROPERTY(CACHE LIBS_BUILD_CGNS_TAG PROPERTY STRINGS "v3.4.1" "v4.0.0" "v4.3.0")
-    MESSAGE(STATUS "Compiling CGNS version tag: " ${LIBS_BUILD_CGNS_TAG})
+    # > Current version 4.5.0 has a regression, so stick with 4.4.0
+    SET(CGNS_VERSION "4.4.0")
+    SET(CGNS_TAG     "v${CGNS_VERSION}")
+    SET(CGNS_STR     ${CGNS_TAG})
+    MARK_AS_ADVANCED(FORCE CGNS_TAG)
+    MARK_AS_ADVANCED(FORCE CGNS_VERSION)
 
-    IF("${LIBS_BUILD_CGNS_TAG}" MATCHES "v4.3.0")
-      SET(CGNS_VERSION 4300)
-    ELSEIF("${LIBS_BUILD_CGNS_TAG}" MATCHES "v4.0.0")
-      SET(CGNS_VERSION 4000)
-    ELSEIF("${LIBS_BUILD_CGNS_TAG}" MATCHES "v3.4.1")
-      SET(CGNS_VERSION 3401)
-    ELSE()
-      SET(CGNS_VERSION -1)
+    # Set CGNS build dir
+    SET(LIBS_CGNS_DIR ${LIBS_EXTERNAL_LIB_DIR}/CGNS)
+
+    # Check if CGNS was already built
+    UNSET(CGNS_FOUND)
+    UNSET(CGNS_VERSION)
+    UNSET(CGNS_INCLUDE_DIR)
+    UNSET(CGNS_LIBRARIES)
+    FIND_PACKAGE(CGNS QUIET PATHS ${LIBS_CGNS_DIR} NO_DEFAULT_PATH)
+
+    IF(CGNS_FOUND)
+      # If re-running CMake, it might wrongly pick-up the system HDF5
+      IF(NOT EXISTS ${LIBS_CGNS_DIR}/lib/libcgns.so)
+      # IF (NOT EXISTS "${LIBS_CGNS_DIR}/lib/libcgns.a")
+        UNSET(CGNS_FOUND)
+        SET(CGNS_VERSION     ${CGNS_STR})
+      ENDIF()
     ENDIF()
 
-    SET(LIBS_CGNS_DLDIR ${LIBS_EXTERNAL_LIB_DIR}/CGNS${LIBS_BUILD_CGNS_TAG})
-    SET(LIBS_CGNS_DIR   ${LIBS_CGNS_DLDIR})
-
-    IF (NOT EXISTS "${LIBS_CGNS_DIR}/lib/libcgns.a")
+    # Check again if CGNS was found
+    IF(NOT CGNS_FOUND)
+      SET(CGNS_VERSION     ${CGNS_STR})
+      # 64 Bit support should be enabled by default
       STRING(COMPARE EQUAL ${LIBS_BUILD_CGNS_INT} "64" LIBS_CGNS_64BIT)
 
-      # Origin pointing to Github
-      IF("${GIT_ORIGIN}" MATCHES ".github.com")
-        SET (CGNSDOWNLOAD "https://github.com/CGNS/CGNS.git")
-      ELSE()
-        SET (CGNSDOWNLOAD ${LIBS_DLPATH}libs/cgns.git )
-      ENDIF()
-      MESSAGE(STATUS "Downloading CGNS from ${CGNSDOWNLOAD}")
-
       # Fallback for disabling HDF5 for CGNS compilation
-      OPTION(LIBS_BUILD_CGNS_ENABLE_HDF5 "Build CGNS library with -DCGNS_ENABLE_HDF5=ON" ON)
-      MESSAGE(STATUS "Build CGNS library with -DCGNS_ENABLE_HDF5=" ${LIBS_BUILD_CGNS_ENABLE_HDF5})
+      # OPTION(LIBS_BUILD_CGNS_ENABLE_HDF5 "Build CGNS library with -DCGNS_ENABLE_HDF5=ON" ON)
+      # MESSAGE(STATUS "Build CGNS library with -DCGNS_ENABLE_HDF5=" ${LIBS_BUILD_CGNS_ENABLE_HDF5})
 
-      # Build CGNS with HDF5 support
+      # Let CMake take care of download, configure and build
       EXTERNALPROJECT_ADD(cgns
-        GIT_REPOSITORY ${CGNSDOWNLOAD}
-        GIT_TAG ${LIBS_BUILD_CGNS_TAG}
-        GIT_PROGRESS TRUE
+        GIT_REPOSITORY     ${CGNS_DOWNLOAD}
+        GIT_TAG            ${CGNS_TAG}
+        GIT_PROGRESS       TRUE
         ${${GITSHALLOW}}
-        PREFIX ${LIBS_CGNS_DIR}
-        CMAKE_ARGS  -DCMAKE_INSTALL_PREFIX=${LIBS_CGNS_DIR} -DCMAKE_PREFIX_PATH=${LIBS_HDF5_DIR} -DCGNS_ENABLE_FORTRAN=ON -DCGNS_ENABLE_64BIT=${LIBS_CGNS_64BIT} -DCGNS_BUILD_SHARED=ON -DCGNS_USE_SHARED=ON -DCMAKE_BUILD_TYPE=Release -DCGNS_BUILD_CGNSTOOLS=OFF -DCGNS_ENABLE_HDF5=${LIBS_BUILD_CGNS_ENABLE_HDF5} -DCGNS_ENABLE_PARALLEL=OFF -DCGNS_ENABLE_TESTS=OFF -DCMAKE_SKIP_RPATH=ON
-        BUILD_BYPRODUCTS ${LIBS_CGNS_DIR}/lib/libcgns.a
+        PREFIX             ${LIBS_CGNS_DIR}
+        INSTALL_DIR        ${LIBS_CGNS_DIR}
+        # Set the CMake arguments for CGNS
+        CMAKE_ARGS         -DCMAKE_INSTALL_PREFIX=${LIBS_CGNS_DIR} -DCMAKE_PREFIX_PATH=${LIBS_HDF5_DIR} -DCGNS_ENABLE_FORTRAN=ON -DCGNS_ENABLE_64BIT=${LIBS_CGNS_64BIT} -DCGNS_BUILD_SHARED=ON -DCGNS_USE_SHARED=ON -DCMAKE_BUILD_TYPE=Release -DCGNS_BUILD_CGNSTOOLS=OFF -DCGNS_ENABLE_HDF5=ON -DCGNS_ENABLE_PARALLEL=OFF -DCGNS_ENABLE_TESTS=OFF -DCMAKE_SKIP_RPATH=ON
+        # Set the build byproducts
+        BUILD_BYPRODUCTS   ${LIBS_CGNS_DIR}/lib/libcgns.a ${LIBS_CGNS_DIR}/lib/libcgns.so
       )
+
+      # Add CMake CGNS to the list of self-built externals
+      LIST(APPEND SELFBUILTEXTERNALS cgns)
+
       # If HDF5 is built in HOPR, it must occur before the CGNS compilation (for the support of HDF5-based CGNS files)
       IF(LIBS_BUILD_HDF5)
         IF (NOT EXISTS "${LIBS_HDF5_DIR}/lib/libhdf5.a")
           ADD_DEPENDENCIES(cgns HDF5)
         ENDIF()
       ENDIF()
-      LIST(APPEND SELFBUILTEXTERNALS cgns)
     ENDIF()
 
-    LIST(INSERT linkedlibs 0 ${LIBS_CGNS_DIR}/lib/libcgns.a)
-    INCLUDE_DIRECTORIES(   ${LIBS_CGNS_DIR}/include)
+    # Set CGNS paths
+    SET(CGNS_INCLUDE_DIR       ${LIBS_CGNS_DIR}/include)
+    SET(CGNS_LIBRARIES         ${LIBS_CGNS_DIR}/lib/libcgns.so ${LIBS_CGNS_DIR}/lib/libcgns.a)
 
-    MESSAGE(STATUS "Compiling with [CGNS] (${LIBS_BUILD_CGNS_TAG})")
+    # Set build status to self-built
+    SET(CGNS_BUILD_STATUS "self-built")
   ENDIF()
 
-  # set pre-processor flag for CGNS version
-  ADD_DEFINITIONS(-DPP_CGNS_VERSION=${CGNS_VERSION})
+  # Set pre-processor flag for CGNS version
+  STRING(REPLACE "v" ""  CGNS_VERSION ${CGNS_VERSION})
+  # Warn about version 4.5.0
+  IF("${CGNS_VERSION}" VERSION_EQUAL "4.5.0")
+    MESSAGE(WARNING "CGNS ${CGNS_VERSION} has issues with reading surface meshes. Consider downgrading to v4.4.0")
+  ENDIF()
+  MESSAGE(STATUS "Compiling with ${CGNS_BUILD_STATUS} [CGNS] (v${CGNS_VERSION})")
 
+  STRING(REPLACE "." ";" VERSION_LIST ${CGNS_VERSION})
+  # Ensure at least three elements (major, minor, patch)
+  LIST(APPEND VERSION_LIST 0 0)
+  # Access elements of the list
+  LIST(GET VERSION_LIST 0 MAJOR)
+  LIST(GET VERSION_LIST 1 MINOR)
+  LIST(GET VERSION_LIST 2 PATCH)
+
+  # Convert to version format
+  MATH(EXPR CGNS_VERSION "${MAJOR} * 1000 + ${MINOR} * 10 + ${PATCH}")
+  UNSET(VERSION_LIST)
+  UNSET(MAJOR)
+  UNSET(MINOR)
+  UNSET(PATCH)
+  ADD_COMPILE_DEFINITIONS(PP_CGNS_VERSION=${CGNS_VERSION})
+
+  # Actually add the CGNS paths (system/self-built) to the linking paths
+  INCLUDE_DIRECTORIES(BEFORE ${CGNS_INCLUDE_DIR})
+  LIST(PREPEND linkedlibs ${CGNS_LIBRARIES} )
 ENDIF()
