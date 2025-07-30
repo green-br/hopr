@@ -23,95 +23,10 @@ ENDIF()
 UNSET(linkedlibs CACHE)
 
 # =========================================================================
-# MPI
-# =========================================================================
-# Try to find system MPI
-SET(MPI_DETERMINE_LIBRARY_VERSION TRUE)
-FIND_PACKAGE(MPI QUIET)
-IF (MPI_FOUND)
-  MESSAGE (STATUS "[MPI] found in system libraries")
-  OPTION(LIBS_USE_MPI "Compile SINGLE or MPI version" ON)
-ELSE()
-  MESSAGE (STATUS "[MPI] not found in system libraries")
-  OPTION(LIBS_USE_MPI "Compile SINGLE or MPI version" OFF)
-ENDIF()
-
-IF(LIBS_USE_MPI)
-  # If library is specifically requested, it is required
-  SET(MPI_DETERMINE_LIBRARY_VERSION TRUE)
-  FIND_PACKAGE(MPI REQUIRED)
-
-  IF (NOT MPI_Fortran_NO_INTERROGATE)
-    FOREACH(DIR ${MPI_INCLUDE_PATH})
-      INCLUDE_DIRECTORIES(${DIR})
-    ENDFOREACH()
-    FOREACH(DIR ${MPI_Fortran_INCLUDE_PATH})
-      INCLUDE_DIRECTORIES(${DIR})
-    ENDFOREACH()
-    LIST(APPEND linkedlibs ${MPI_Fortran_LIBRARIES})
-  ENDIF()
-
-  MARK_AS_ADVANCED(FORCE MPI_LIBRARY MPI_EXTRA_LIBRARY)
-  ADD_COMPILE_DEFINITIONS(LIBS_MPICH_FIX_SHM_INTERFACE=0)
-
-  # Detect MPI implementation and version since it changes some MPI definitions
-  IF(MPI_C_LIBRARY_VERSION_STRING MATCHES ".*CRAY MPICH.*" AND MPI_C_VERSION_MAJOR VERSION_EQUAL "3")
-    SET(LIBS_MPI_NAME "Cray MPICH")
-    STRING(REGEX MATCH "([0-9]+)\\.([0-9]+)" MPI_C_LIBRARY_VERSION ${MPI_C_LIBRARY_VERSION_STRING})
-    # Cray MPICH in combination with GNU has problems with calling the same MPI routine
-    # with different arguments in the same compilation unit
-    IF (CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-      SET(CMAKE_Fortran_FLAGS  "${CMAKE_Fortran_FLAGS} -fallow-argument-mismatch")
-    ENDIF()
-  ELSEIF(MPI_C_LIBRARY_VERSION_STRING MATCHES ".*MPICH.*" AND MPI_C_VERSION_MAJOR VERSION_GREATER_EQUAL "3")
-    SET(LIBS_MPI_NAME "MPICH")
-    STRING(REGEX MATCH "([0-9]+)\\.([0-9]+)" MPI_C_LIBRARY_VERSION ${MPI_C_LIBRARY_VERSION_STRING})
-    # Missing interface added in 4.2, see https://github.com/pmodels/mpich/pull/6727
-    IF(${MPI_C_LIBRARY_VERSION} VERSION_LESS_EQUAL "4.1")
-      ADD_COMPILE_DEFINITIONS(LIBS_MPICH_FIX_SHM_INTERFACE=1)
-    ENDIF()
-    # MPICH in combination with GNU has problems with calling the same MPI routine
-    # with different arguments in the same compilation unit
-    IF (CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-      SET(CMAKE_Fortran_FLAGS  "${CMAKE_Fortran_FLAGS} -fallow-argument-mismatch")
-    ENDIF()
-  ELSEIF(MPI_C_LIBRARY_VERSION_STRING MATCHES ".*Open MPI.*" AND MPI_C_VERSION_MAJOR VERSION_EQUAL "3")
-    SET(LIBS_MPI_NAME "OpenMPI")
-    STRING(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" MPI_C_LIBRARY_VERSION ${MPI_C_LIBRARY_VERSION_STRING})
-  ELSEIF(MPI_C_LIBRARY_VERSION_STRING MATCHES ".*HPE MPT.*" AND MPI_C_VERSION_MAJOR VERSION_EQUAL "3")
-    #SET(LIBS_MPI_NAME "HPE MPT")
-    #STRING(REGEX MATCH "([0-9]+)\\.([0-9]+)" MPI_C_LIBRARY_VERSION ${MPI_C_LIBRARY_VERSION_STRING})
-    MESSAGE(FATAL_ERROR "HPE MPT not supported any more")
-  ELSEIF(MPI_C_LIBRARY_VERSION_STRING MATCHES ".*Intel.*" AND MPI_C_VERSION_MAJOR VERSION_GREATER_EQUAL "3")
-    SET(LIBS_MPI_NAME "Intel MPI")
-    STRING(REGEX MATCH "([0-9]+)\\.([0-9]+)" MPI_C_LIBRARY_VERSION ${MPI_C_LIBRARY_VERSION_STRING})
-  ELSE()
-    MESSAGE(FATAL_ERROR "Cannot detect supported MPI type or version. Valid options are Cray MPICH, IntelMPI, MPICH, and OpenMPI supporting MPI version 3.x")
-  ENDIF()
-
-  MESSAGE(STATUS "Compiling with [${LIBS_MPI_NAME}] (v${MPI_C_LIBRARY_VERSION})")
-  ADD_COMPILE_DEFINITIONS(USE_MPI=1)
-
-  # LUMI needs even more help here
-  IF("${CMAKE_FQDN_HOST}" MATCHES ".can")
-    SET(MPI_C_COMPILER       cc)
-    SET(MPI_CXX_COMPILER     CC)
-    SET(MPI_Fortran_COMPILER ftn)
-  ENDIF()
-ELSE()
-  ADD_COMPILE_DEFINITIONS(USE_MPI=0)
-ENDIF()
-
-
-# =========================================================================
 # Add the libraries
 # =========================================================================
 # Set directory to compile external libraries
-IF(LIBS_USE_MPI)
-  SET(LIBS_EXTERNAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/share/${CMAKE_Fortran_COMPILER_ID}-MPI)
-ELSE()
-  SET(LIBS_EXTERNAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/share/${CMAKE_Fortran_COMPILER_ID})
-ENDIF()
+SET(LIBS_EXTERNAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/share/${CMAKE_Fortran_COMPILER_ID})
 MARK_AS_ADVANCED(FORCE LIBS_EXTERNAL_LIB_DIR)
 
 # =========================================================================
@@ -122,13 +37,9 @@ SET(LIBS_HDF5_CMAKE TRUE)
 
 # Set preferences for HDF5 library
 # SET(HDF5_USE_STATIC_LIBRARIES TRUE)
-IF (LIBS_USE_MPI)
-  SET(HDF5_PREFER_PARALLEL TRUE)
-  FIND_PROGRAM(HDF5_COMPILER h5pcc)
-ELSE()
-  SET(HDF5_PREFER_PARALLEL FALSE)
-  FIND_PROGRAM(HDF5_COMPILER h5cc)
-ENDIF()
+SET(HDF5_PREFER_PARALLEL FALSE)
+FIND_PROGRAM(HDF5_COMPILER h5cc)
+MARK_AS_ADVANCED(FORCE HDF5_COMPILER)
 
 # When using the configure version, CMake takes the directory of the first HDF5 compiler found
 # > h5cc  - serial   version
@@ -186,38 +97,6 @@ IF(NOT LIBS_BUILD_HDF5)
   # If library is specifically requested, it is required
   FIND_PACKAGE(HDF5 REQUIRED COMPONENTS C Fortran)
 
-  # Check if HDF5 is parallel
-  # > HDF5_IS_PARALLEL is set by FIND_PACKAGE(HDF5)
-  IF(LIBS_USE_MPI)
-    IF(NOT HDF5_IS_PARALLEL)
-      MESSAGE(FATAL_ERROR "HDF5 is not built with parallel support. Please install a parallel version of HDF5 or build it yourself.")
-    ENDIF()
-
-    # If HDF5 Fortran library is not set, get it from the Fortran target
-    IF("${HDF5_Fortran_LIBRARY_hdf5_fortran}" STREQUAL "")
-      GET_PROPERTY(HDF5_Fortran_LIBRARY_hdf5_fortran TARGET hdf5::hdf5_fortran PROPERTY LOCATION)
-    ENDIF()
-
-    IF(NOT "${HDF5_Fortran_LIBRARY_hdf5_fortran}" STREQUAL "")
-      IF(APPLE)
-        EXECUTE_PROCESS(COMMAND nm -gU      ${HDF5_Fortran_LIBRARY_hdf5_fortran} COMMAND grep mpio_f08 OUTPUT_VARIABLE HDF5_USES_MPIF08 RESULT_VARIABLE GREP_RESULT OUTPUT_STRIP_TRAILING_WHITESPACE)
-      ELSE()
-        EXECUTE_PROCESS(COMMAND readelf -Ws ${HDF5_Fortran_LIBRARY_hdf5_fortran} COMMAND grep mpio_f08 OUTPUT_VARIABLE HDF5_USES_MPIF08 RESULT_VARIABLE GREP_RESULT OUTPUT_STRIP_TRAILING_WHITESPACE)
-      ENDIF()
-    # Cray might still not provide anything, set mpi_f08 to false
-    ELSE()
-      SET(GREP_RESULT 1)
-    ENDIF()
-
-    IF(GREP_RESULT EQUAL 0)
-      SET(HDF5_MPI_VERSION "[mpi_f08]")
-      SET(HDF5_HAS_MPIF08 TRUE)
-    ELSE()
-      SET(HDF5_MPI_VERSION "[mpi]")
-      SET(HDF5_HAS_MPIF08 FALSE)
-    ENDIF()
-  ENDIF()
-
   # Set build status to system
   SET(HDF5_BUILD_STATUS "system")
 ELSE()
@@ -247,14 +126,7 @@ ELSE()
   UNSET(HDF5_INCLUDE_DIR)
   UNSET(HDF5_LIBRARIES)
   UNSET(HDF5_Fortran_LIBRARIES)
-  FIND_PACKAGE(HDF5 ${HDF5_STR} QUIET COMPONENTS C Fortran HDF5_PREFER_PARALLEL=${LIBS_USE_MPI} PATHS ${LIBS_HDF5_DIR} NO_DEFAULT_PATH)
-
-  # CMake does not correctly pick-up HDF5 parallel support, thus set it manually
-  SET(HDF5_IS_PARALLEL ${LIBS_USE_MPI})
-  IF(HDF5_IS_PARALLEL)
-    SET(HDF5_MPI_VERSION "[mpi_f08]")
-    SET(HDF5_HAS_MPIF08 TRUE)
-  ENDIF()
+  FIND_PACKAGE(HDF5 ${HDF5_STR} QUIET COMPONENTS C Fortran HDF5_PREFER_PARALLEL=OFF PATHS ${LIBS_HDF5_DIR} NO_DEFAULT_PATH)
 
   IF(HDF5_FOUND)
     # If re-running CMake, it might wrongly pick-up the system HDF5
@@ -289,7 +161,7 @@ ELSE()
       CMAKE_GENERATOR    "Unix Makefiles"
       BUILD_COMMAND      make -j${N}
       # Set the CMake arguments for HDF5
-      CMAKE_ARGS         -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=${LIBS_HDF5_DIR} -DHDF5_INSTALL_CMAKE_DIR=lib/cmake/hdf5 -DCMAKE_POLICY_DEFAULT_CMP0175=OLD -DBUILD_STATIC_LIBS=ON -DHDF5_BUILD_FORTRAN=ON -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF -DHDF5_ENABLE_SZIP_SUPPORT=OFF -DHDF5_ENABLE_PARALLEL=${LIBS_USE_MPI}
+      CMAKE_ARGS         -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=${LIBS_HDF5_DIR} -DHDF5_INSTALL_CMAKE_DIR=lib/cmake/hdf5 -DCMAKE_POLICY_DEFAULT_CMP0175=OLD -DBUILD_STATIC_LIBS=ON -DHDF5_BUILD_FORTRAN=ON -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF -DHDF5_ENABLE_SZIP_SUPPORT=OFF -DHDF5_ENABLE_PARALLEL=OFF
       # Set the build byproducts
       INSTALL_BYPRODUCTS ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.a ${LIBS_HDF5_DIR}/lib/libhdf5.a ${LIBS_HDF5_DIR}/lib/libhdf5.so ${LIBS_HDF5_DIR}/lib/libhdf5_fortran.so ${LIBS_HDF5_DIR}/bin/h5diff
     )
