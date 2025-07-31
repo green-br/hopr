@@ -289,8 +289,9 @@ ELSE()
         ${${GITSHALLOW}}
         PREFIX             ${LIBS_MATH_DIR}
         UPDATE_COMMAND     ""
-        # Set parallel build with maximum number of threads
-        BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
+        # LAPACK explicitely needs "make" to configure
+        CMAKE_GENERATOR    "Unix Makefiles"
+        BUILD_COMMAND      make -j${N}
         # Set the CMake arguments for LAPACK
         CMAKE_ARGS         -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=${LIBS_MATH_DIR} -DBLAS++=OFF -DLAPACK++=OFF -DBUILD_SHARED_LIBS=OFF -DCBLAS=OFF -DLAPACKE=OFF -DBUILD_TESTING=OFF
         # Set the build byproducts
