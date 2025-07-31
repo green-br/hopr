@@ -270,14 +270,6 @@ ELSE()
   INCLUDE(ProcessorCount)
   PROCESSORCOUNT(N)
 
-  IF("${CMAKE_GENERATOR}" STREQUAL "Ninja")
-    SET(BUILD_COMMAND ninja)
-  ELSEIF("${CMAKE_GENERATOR}" STREQUAL "Unix Makefiles")
-    SET(BUILD_COMMAND make)
-  ELSE()
-    MESSAGE(FATAL_ERROR "Unknown build system")
-  ENDIF()
-
   IF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "LAPACK")
     # Check if math lib was already built
     IF (NOT EXISTS "${LIBS_MATH_DIR}/lib/liblapack.a")
@@ -311,9 +303,11 @@ ELSE()
         ${${GITSHALLOW}}
         PREFIX             ${LIBS_MATH_DIR}
         UPDATE_COMMAND     ""
-        CONFIGURE_COMMAND  ""
-        # Set parallel build with maximum number of threads
-        BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
+        # OpenBLAS explicitely needs "make" to configure
+        CMAKE_GENERATOR    "Unix Makefiles"
+        BUILD_COMMAND      make -j${N}
+        # Set the CMake arguments for LAPACK
+        CMAKE_ARGS         -DBUILD_STATIC_LIBS=ON -DBUILD_TESTING=OFF
         # Set the CMake arguments for OpenBLAS
         BUILD_BYPRODUCTS   ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR}/libopenblas.a
         BUILD_IN_SOURCE    TRUE
@@ -323,8 +317,6 @@ ELSE()
       LIST(APPEND SELFBUILTEXTERNALS ${LIBS_BUILD_MATH_LIB_VENDOR})
     ENDIF()
   ENDIF()
-
-  UNSET(BUILD_COMMAND)
 
   IF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "LAPACK")
     # Set math lib paths
