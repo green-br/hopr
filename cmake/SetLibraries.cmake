@@ -60,6 +60,17 @@ IF (NOT LIBS_BUILD_HDF5)
     UNSET(HDF5_FOUND)
   ENDIF()
 
+  # HDF5 1.14.5 and 1.14.6 contain a bug where they wrongly add an incomplete ZLIB::ZLIB target
+  IF(HDF5_FOUND AND NOT "${HDF5_VERSION}" STREQUAL "" AND "${HDF5_VERSION}" GREATER_EQUAL "1.14.5" AND "${HDF5_VERSION}" LESS_EQUAL "1.14.6")
+    IF(TARGET hdf5-static)
+      # If HDF5 needs ZLIB, a ZLIB:ZLIB target interface can pop up for hdf5
+      GET_TARGET_PROPERTY(check_hdf5_link_defs hdf5-static INTERFACE_LINK_LIBRARIES)
+      IF(check_hdf5_link_defs)
+        UNSET(HDF5_FOUND)
+      ENDIF()
+    ENDIF()
+  ENDIF()
+
   IF (HDF5_FOUND)
     MESSAGE (STATUS "[HDF5] found in system libraries [${HDF5_DIR}]")
     SET(LIBS_BUILD_HDF5 OFF CACHE BOOL "Compile and build HDF5 library")
