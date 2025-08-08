@@ -131,6 +131,7 @@ ELSE()
   UNSET(HDF5_VERSION)
   UNSET(HDF5_INCLUDE_DIR)
   UNSET(HDF5_LIBRARIES)
+  UNSET(HDF5_Fortran_LIBRARIES)
   FIND_PACKAGE(HDF5 ${HDF5_STR} QUIET COMPONENTS C Fortran HDF5_PREFER_PARALLEL=OFF PATHS ${LIBS_HDF5_DIR} NO_DEFAULT_PATH)
 
   IF(HDF5_FOUND)
@@ -321,7 +322,7 @@ ELSE()
     ENDIF()
   ELSEIF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "OpenBLAS")
     # Check if math lib was already built
-    IF (NOT EXISTS "${LIBS_MATH_DIR}/libopenblas.a")
+    IF (NOT EXISTS "${LIBS_MATH_DIR}/lib/libopenblas.a")
       # Let CMake take care of download, configure and build
       EXTERNALPROJECT_ADD(${LIBS_BUILD_MATH_LIB_VENDOR}
         GIT_REPOSITORY     ${MATH_LIB_DOWNLOAD}
@@ -336,7 +337,7 @@ ELSE()
         # Set the CMake arguments for LAPACK
         CMAKE_ARGS         -DBUILD_STATIC_LIBS=ON -DBUILD_TESTING=OFF
         # Set the CMake arguments for OpenBLAS
-        BUILD_BYPRODUCTS   ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR}/libopenblas.a
+        BUILD_BYPRODUCTS   ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR}/lib/libopenblas.a
         BUILD_IN_SOURCE    TRUE
         INSTALL_COMMAND    ""
       )
@@ -364,9 +365,10 @@ ELSE()
     MESSAGE(STATUS "Compiling with self-built [LAPACK]")
   ELSEIF (LIBS_BUILD_MATH_LIB_VENDOR STREQUAL "OpenBLAS")
     # Set math lib paths
-    SET(MATH_LIB_LIBRARIES              ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR})
+    SET(MATH_LIB_LIBRARIES              ${LIBS_MATH_DIR}/src/${LIBS_BUILD_MATH_LIB_VENDOR}/lib)
 
     UNSET(LAPACK_LIBRARY)
+    UNSET(BLAS_LIBRARY)
     UNSET(LAPACK_LIBRARIES)
 
     SET(LAPACK_LIBRARY                  ${MATH_LIB_LIBRARIES}/libopenblas.a)
