@@ -60,18 +60,21 @@ IF (NOT LIBS_BUILD_HDF5)
     FIND_PACKAGE(HDF5 QUIET COMPONENTS C Fortran)
   ENDIF()
 
-  # HOPR cannot use the parallel version, disable system HDF
+  # HOPR can use a parallel system HDF5 if the self-built CGNS finds MPI, i.e. we need to link CGNS against MPI even though it does not use it
+  # Therefore, along with CGNS_ENABLE_HDF5, enable HDF5_NEEDS_MPI for a parallel system HDF5, which invokes CGNS' own FindMPI script
+  # see also: https://stackoverflow.com/questions/51561033/using-serial-hdf5-c-with-cmake
   # > HDF5_IS_PARALLEL is set by FIND_PACKAGE(HDF5)
-  IF(HDF5_IS_PARALLEL)
-    UNSET(HDF5_FOUND)
-  ENDIF()
+  #  IF(HDF5_IS_PARALLEL)
+  #    UNSET(HDF5_FOUND)
+  #  ENDIF()
 
-  # HDF5 1.14.5 and 1.14.6 contain a bug where they wrongly add an incomplete ZLIB::ZLIB target
+  # HDF5 1.14.5 and 1.14.6 contain a bug where they wrongly add an incomplete ZLIB::ZLIB target, which prevent CGNS compilation
+  # see also https://github.com/CGNS/CGNS/pull/834
   IF(HDF5_FOUND AND NOT "${HDF5_VERSION}" STREQUAL "" AND "${HDF5_VERSION}" GREATER_EQUAL "1.14.5" AND "${HDF5_VERSION}" LESS_EQUAL "1.14.6")
     IF(TARGET hdf5-static)
-      # If HDF5 needs ZLIB, a ZLIB:ZLIB target interface can pop up for hdf5
+      # if system HDF5 links against a faulty ZLIB:ZLIB target interface, use self-built HDF5 instead
       GET_TARGET_PROPERTY(check_hdf5_link_defs hdf5-static INTERFACE_LINK_LIBRARIES)
-      IF(check_hdf5_link_defs)
+      IF ("$<LINK_ONLY:ZLIB::ZLIB>" IN_LIST check_hdf5_link_defs)
         UNSET(HDF5_FOUND)
       ENDIF()
     ENDIF()
@@ -220,10 +223,10 @@ IF(HDF5_VERSION VERSION_EQUAL "1.14")
   LIST(FILTER HDF5_INCLUDE_DIR EXCLUDE REGEX "src/H5FDsubfiling")
 ENDIF()
 
-# Actually add the HDF5 paths (system/self-built) to the linking paths
+# Actually add the HDF5 paths (system/self-built) to the linking paths, including the library containing dlopen/dlclose (usually -ldl on UNIX machines)
 # > INFO: We could also use the HDF5::HDF5/hdf5::hdf5/hdf5::hdf5_fortran targets here but they are not set before compiling self-built HDF5
 INCLUDE_DIRECTORIES(BEFORE ${HDF5_INCLUDE_DIR})
-LIST(PREPEND linkedlibs ${HDF5_LIBRARIES} )
+LIST(PREPEND linkedlibs ${HDF5_LIBRARIES} ${CMAKE_DL_LIBS})
 IF(${HDF5_IS_PARALLEL})
   MESSAGE(STATUS "Compiling with ${HDF5_BUILD_STATUS} [HDF5] (v${HDF5_VERSION}) with parallel support ${HDF5_MPI_VERSION}")
 ELSE()
@@ -251,8 +254,10 @@ MARK_AS_ADVANCED(FORCE HDF5_hdf5_LIBRARY_RELEASE)
 MARK_AS_ADVANCED(FORCE HDF5_Fortran_LIBRARY_hdf5_fortran)
 MARK_AS_ADVANCED(FORCE HDF5_Fortran_LIBRARY_hdf5_fortran_RELEASE)
 
-# Restore the original PATH
-SET(ENV{PATH} "${ORIGINAL_PATH_ENV}")
+# Restore the original PATH - only if it has been modified above, i.e. ORIGINAL_PATH_ENV is actually defined
+IF(NOT "${HDF5_COMPILER}" STREQUAL "" AND NOT "${HDF5_COMPILER}" STREQUAL "HDF5_COMPILER-NOTFOUND")
+  SET(ENV{PATH} "${ORIGINAL_PATH_ENV}")
+ENDIF()
 
 
 # =========================================================================
@@ -534,7 +539,7 @@ ELSE()
         # Set parallel build with maximum number of threads
         BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
         # Set the CMake arguments for CGNS
-        CMAKE_ARGS         -DCMAKE_INSTALL_PREFIX=${LIBS_CGNS_DIR} -DCMAKE_PREFIX_PATH=${LIBS_HDF5_DIR} -DCGNS_ENABLE_FORTRAN=ON -DCGNS_ENABLE_64BIT=${LIBS_CGNS_64BIT} -DCGNS_BUILD_SHARED=OFF -DCGNS_USE_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DCGNS_BUILD_CGNSTOOLS=OFF -DCGNS_ENABLE_HDF5=ON -DCGNS_ENABLE_PARALLEL=OFF -DCGNS_ENABLE_TESTS=OFF -DCMAKE_SKIP_RPATH=ON
+        CMAKE_ARGS         -DCMAKE_INSTALL_PREFIX=${LIBS_CGNS_DIR} -DCMAKE_PREFIX_PATH=${LIBS_HDF5_DIR} -DCGNS_ENABLE_FORTRAN=ON -DCGNS_ENABLE_64BIT=${LIBS_CGNS_64BIT} -DCGNS_BUILD_SHARED=OFF -DCGNS_USE_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DCGNS_BUILD_CGNSTOOLS=OFF -DCGNS_ENABLE_HDF5=ON -DHDF5_NEED_MPI=${HDF5_IS_PARALLEL} -DCGNS_ENABLE_PARALLEL=OFF -DCGNS_ENABLE_TESTS=OFF -DCMAKE_SKIP_RPATH=ON
         # Set the build byproducts
         BUILD_BYPRODUCTS   ${LIBS_CGNS_DIR}/lib/libcgns.a
       )
