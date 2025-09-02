@@ -225,7 +225,7 @@ name: tab:femelem_info_def
 |                                  |                                                                                                                          |
 |               -                  |                                                             -                                                            |
 | *offsetIndEDGE/lastIndEDGE*:     | Each element has a range of edges in the **EdgeInfo** array.                                                             |
-| *offsetIndVERTEX/lastIndVERTEX*: | Each element has a range of edges in the **VertexInfo** array.                                                           |
+| *offsetIndVERTEX/lastIndVERTEX*: | Each element has a range of vertices in the **VertexInfo** array.                                                        |
 ```
 
 The range and the size are always defined as: *Range=[offset+1,last], Size=last-offset*
