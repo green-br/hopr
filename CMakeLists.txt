@@ -25,7 +25,7 @@ CMAKE_POLICY(SET CMP0079 NEW)
 # Directory for custom CMake source files
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 SET_PROPERTY(GLOBAL PROPERTY USE_FOLDERS ON)
-INCLUDE(CheckOrigin)
+INCLUDE(SetGitHook)
 
 # Load CMake internal extensions
 INCLUDE(CMakeDependentOption)
