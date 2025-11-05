@@ -48,7 +48,7 @@ jobs:
         rpm -U --quiet p7zip-plugins-16.02-31.el8.x86_64.rpm
         dnf install -y epel-release
         dnf config-manager --set-enabled powertools
-        dnf install -y make libasan gcc-gfortran gcc-c++ unzip openblas-devel lapack-devel zlib-devel tree fuse-sshfs fuse-libs file
+        dnf install -y make gcc-gfortran gcc-c++ unzip openblas-devel lapack-devel zlib-devel tree fuse-sshfs fuse-libs file
         groupadd fuse
         user="$(whoami)"
         usermod -a -G fuse "$user"

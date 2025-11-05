@@ -199,7 +199,6 @@ ELSE()
       GIT_PROGRESS       TRUE
       ${${GITSHALLOW}}
       PREFIX             ${LIBS_HDF5_DIR}
-      INSTALL_DIR        ${LIBS_HDF5_DIR}
       UPDATE_COMMAND     ""
       # HDF5 explicitely needs "make" to configure
       CMAKE_GENERATOR    "Unix Makefiles"
@@ -547,7 +546,6 @@ ELSE()
         GIT_PROGRESS       TRUE
         ${${GITSHALLOW}}
         PREFIX             ${LIBS_CGNS_DIR}
-        INSTALL_DIR        ${LIBS_CGNS_DIR}
         # Set parallel build with maximum number of threads
         BUILD_COMMAND      ${BUILD_COMMAND} -j${N}
         # Set the CMake arguments for CGNS
